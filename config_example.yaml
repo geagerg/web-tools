@@ -1,0 +1,21 @@
+api:
+  endpoint: "https://your-nano-banana-pro-endpoint/v1/generate"
+  key: "your-api-key"
+
+defaults:
+  model: "nano-banana-pro"
+  output_format: "url"
+  style: "default"
+
+  model_options:
+    - "nano-banana-pro"
+    - "nano-banana-pro-fast"
+
+  output_format_options:
+    - "url"
+    - "base64"
+
+  style_options:
+    - "default"
+    - "photoreal"
+    - "anime"
