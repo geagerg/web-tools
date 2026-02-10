@@ -2,6 +2,10 @@ api:
   endpoint: "https://your-proxy-endpoint/v1/images/generations"
   key: "your-api-key"
 
+auth:
+  username: "admin"
+  password: "change-this-password"
+
 # 代理接口字段名映射（若你的代理字段不同可在这里改，不用改代码）
 request_fields:
   model: "model"

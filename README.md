@@ -7,15 +7,23 @@
 - 支持上传多张参考图（urls）
 - 文本与参考图至少提供一个
 - 下拉菜单包含：模型名、宽高比、分辨率
-- 接口 `endpoint` 与 `key` 放在 `config_example.yaml`
+- 使用 **Gradio 内置登录页鉴权**（账号密码在配置文件中设置）
 - 服务监听端口 `45001`，并使用 `root_path=/tools`
 
-## 配置
-编辑 `config_example.yaml`：
+## 配置文件使用方式
+1. 复制示例文件：
+```bash
+cp config_example.yaml config.yaml
+```
+2. 编辑 `config.yaml`：
 - `api.endpoint`: 代理接口地址
 - `api.key`: 接口密钥
+- `auth.username`: Gradio 登录账号
+- `auth.password`: Gradio 登录密码
 - `request_fields`: 代理接口字段名映射（和文档不一致时改这里）
 - `defaults`: 下拉选项默认值与候选值
+
+> 应用启动时实际读取的是 `config.yaml`，`config_example.yaml` 仅作为模板。
 
 ## 启动
 ```bash
@@ -28,6 +36,10 @@ python app.py
 
 Nginx 子路径访问（推荐生产）：
 - `https://your-domain/tools/`
+
+## 鉴权说明
+- 启动时通过 `launch(auth=(username, password))` 启用 Gradio 原生登录页。
+- 用户必须先通过登录页鉴权，才能进入工具页面并调用接口。
 
 ## 请求参数说明
 默认按以下字段组装请求体（可在 `request_fields` 自定义）：

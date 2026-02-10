@@ -11,17 +11,26 @@ import requests
 import yaml
 from PIL import Image
 
-CONFIG_PATH = Path("config_example.yaml")
+CONFIG_PATH = Path("config.yaml")
+CONFIG_EXAMPLE_PATH = Path("config_example.yaml")
 
 
 def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        raise FileNotFoundError(
+            f"Config file not found: {path}. 请先复制 {CONFIG_EXAMPLE_PATH} 为 {CONFIG_PATH} 并填写配置。"
+        )
+
     with path.open("r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
 
     if "api" not in cfg or "endpoint" not in cfg["api"] or "key" not in cfg["api"]:
-        raise ValueError("config_example.yaml must include api.endpoint and api.key")
+        raise ValueError("config.yaml must include api.endpoint and api.key")
+
+    auth_cfg = cfg.get("auth", {})
+    if "username" not in auth_cfg or "password" not in auth_cfg:
+        raise ValueError("config.yaml must include auth.username and auth.password")
+
     return cfg
 
 
@@ -228,5 +237,15 @@ def build_ui() -> gr.Blocks:
 
 
 if __name__ == "__main__":
+    cfg = load_config()
+    auth_username = str(cfg["auth"]["username"])
+    auth_password = str(cfg["auth"]["password"])
+
     app = build_ui()
-    app.launch(server_name="0.0.0.0", server_port=45001, root_path="/tools")
+    app.launch(
+        server_name="0.0.0.0",
+        server_port=45001,
+        root_path="/tools",
+        auth=(auth_username, auth_password),
+        auth_message="请输入访问账号和密码",
+    )
