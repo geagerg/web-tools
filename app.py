@@ -44,6 +44,16 @@ def pil_to_data_url(image: Image.Image) -> str:
     return f"data:image/png;base64,{pil_to_base64(image)}"
 
 
+def load_reference_images(image_paths: list[str] | None) -> list[Image.Image]:
+    loaded_images: list[Image.Image] = []
+    for path in image_paths or []:
+        try:
+            loaded_images.append(Image.open(path).convert("RGB"))
+        except Exception:
+            continue
+    return loaded_images
+
+
 def decode_base64_image(image_data: str) -> Image.Image | None:
     try:
         if image_data.startswith("data:"):
@@ -160,7 +170,7 @@ def build_payload(
 
 def call_nano_banana_pro(
     prompt: str,
-    images: list[Image.Image] | None,
+    image_paths: list[str] | None,
     model: str,
     aspect_ratio: str,
     image_size: str,
@@ -171,7 +181,7 @@ def call_nano_banana_pro(
     request_fields = cfg.get("request_fields", {})
 
     prompt = (prompt or "").strip()
-    images = images or []
+    images = load_reference_images(image_paths)
 
     if not prompt and not images:
         return None, "❌ 参数错误：文本和参考图至少提供一个。"
@@ -220,10 +230,16 @@ def build_ui() -> gr.Blocks:
     with gr.Blocks(title="Nano Banana Pro 工具页") as demo:
         gr.Markdown("## Nano Banana 生成页\n支持文本 + 多张参考图（至少一个必填）")
 
-        with gr.Row(equal_height=True):
+        with gr.Row():
             with gr.Column(scale=1):
                 prompt = gr.Textbox(label="文本提示词（可选）", lines=4, placeholder="输入你想生成的内容")
-                images = gr.Gallery(label="参考图（可选，可上传多张）", type="pil")
+                images = gr.File(
+                    label="参考图（可选，可上传多张）",
+                    file_count="multiple",
+                    file_types=["image"],
+                    type="filepath",
+                )
+                gr.Markdown("上传第一张后可继续点击上传区域添加更多图片。")
 
                 with gr.Row():
                     model = gr.Dropdown(
@@ -242,7 +258,7 @@ def build_ui() -> gr.Blocks:
                         value=defaults.get("image_size", image_size_options[0]),
                     )
 
-                submit = gr.Button("提交", variant="primary")
+                submit = gr.Button("提交", variant="primary", size="sm")
 
             with gr.Column(scale=1):
                 result_image = gr.Image(label="输出图片", type="pil", height=520)
