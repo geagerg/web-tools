@@ -14,6 +14,20 @@ from PIL import Image
 CONFIG_PATH = Path("config.yaml")
 CONFIG_EXAMPLE_PATH = Path("config_example.yaml")
 
+PREVIEW_CSS = """
+#ref-preview .grid-container {
+  grid-template-columns: repeat(auto-fill, 96px) !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+}
+
+#ref-preview .grid-container img {
+  width: 96px !important;
+  height: 96px !important;
+  object-fit: cover !important;
+}
+"""
+
 
 def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
     if not path.exists():
@@ -258,7 +272,13 @@ def build_ui() -> gr.Blocks:
                     file_types=["image"],
                     type="filepath",
                 )
-                image_previews = gr.Gallery(label="参考图预览", columns=4, height=180, object_fit="contain")
+                image_previews = gr.Gallery(
+                    label="参考图预览",
+                    columns=4,
+                    height=220,
+                    object_fit="cover",
+                    elem_id="ref-preview",
+                )
                 gr.Markdown("上传后可看到缩略图预览，也可继续点击上传区域添加更多图片。")
 
                 with gr.Row():
@@ -307,4 +327,5 @@ if __name__ == "__main__":
         root_path="/tools",
         auth=(auth_username, auth_password),
         auth_message="请输入访问账号和密码",
+        css=PREVIEW_CSS,
     )
