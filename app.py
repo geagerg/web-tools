@@ -54,6 +54,10 @@ def load_reference_images(image_paths: list[str] | None) -> list[Image.Image]:
     return loaded_images
 
 
+def build_image_previews(image_paths: list[str] | None) -> list[Image.Image]:
+    return load_reference_images(image_paths)
+
+
 def decode_base64_image(image_data: str) -> Image.Image | None:
     try:
         if image_data.startswith("data:"):
@@ -168,6 +172,22 @@ def build_payload(
     return payload
 
 
+def format_debug_output(
+    request_payload: dict[str, Any],
+    response_payload: dict[str, Any] | None = None,
+    raw_response: str | None = None,
+    error: str | None = None,
+) -> str:
+    content: dict[str, Any] = {"request_payload": request_payload}
+    if response_payload is not None:
+        content["response_payload"] = response_payload
+    if raw_response:
+        content["raw_response"] = raw_response
+    if error:
+        content["error"] = error
+    return json.dumps(content, ensure_ascii=False, indent=2)
+
+
 def call_nano_banana_pro(
     prompt: str,
     image_paths: list[str] | None,
@@ -204,16 +224,15 @@ def call_nano_banana_pro(
         response = requests.post(endpoint, headers=headers, json=payload, timeout=90)
         response.raise_for_status()
     except requests.RequestException as exc:
-        return None, f"❌ 接口请求失败: {exc}"
+        return None, format_debug_output(request_payload=payload, error=f"接口请求失败: {exc}")
 
     data = parse_response_payload(response)
     if data is None:
-        return None, response.text
+        return None, format_debug_output(request_payload=payload, raw_response=response.text)
 
     image_payload = find_image_payload(data)
     image = materialize_image(image_payload) if image_payload else None
-    formatted_json = json.dumps(data, ensure_ascii=False, indent=2)
-    return image, formatted_json
+    return image, format_debug_output(request_payload=payload, response_payload=data)
 
 
 def build_ui() -> gr.Blocks:
@@ -239,7 +258,8 @@ def build_ui() -> gr.Blocks:
                     file_types=["image"],
                     type="filepath",
                 )
-                gr.Markdown("上传第一张后可继续点击上传区域添加更多图片。")
+                image_previews = gr.Gallery(label="参考图预览", columns=4, height=180, object_fit="contain")
+                gr.Markdown("上传后可看到缩略图预览，也可继续点击上传区域添加更多图片。")
 
                 with gr.Row():
                     model = gr.Dropdown(
@@ -263,6 +283,8 @@ def build_ui() -> gr.Blocks:
             with gr.Column(scale=1):
                 result_image = gr.Image(label="输出图片", type="pil", height=520)
                 result_text = gr.Code(label="接口响应（调试）", language="json", lines=8)
+
+        images.change(fn=build_image_previews, inputs=images, outputs=image_previews)
 
         submit.click(
             fn=call_nano_banana_pro,
