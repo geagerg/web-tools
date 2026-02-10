@@ -31,6 +31,10 @@ def pil_to_base64(image: Image.Image) -> str:
     return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
+def pil_to_data_url(image: Image.Image) -> str:
+    return f"data:image/png;base64,{pil_to_base64(image)}"
+
+
 def decode_base64_image(image_data: str) -> Image.Image | None:
     try:
         if image_data.startswith("data:"):
@@ -59,6 +63,7 @@ def find_image_payload(data: Any) -> str | None:
             "image",
             "image_url",
             "url",
+            "urls",
             "image_base64",
             "b64_json",
             "output",
@@ -93,16 +98,46 @@ def materialize_image(image_payload: str) -> Image.Image | None:
     return decode_base64_image(image_payload)
 
 
+def build_payload(
+    prompt: str,
+    images: list[Image.Image],
+    model: str,
+    aspect_ratio: str,
+    image_size: str,
+    request_fields: dict[str, str],
+) -> dict[str, Any]:
+    model_field = request_fields.get("model", "model")
+    prompt_field = request_fields.get("prompt", "prompt")
+    images_field = request_fields.get("images", "urls")
+    aspect_ratio_field = request_fields.get("aspect_ratio", "aspectRatio")
+    image_size_field = request_fields.get("image_size", "imageSize")
+
+    payload: dict[str, Any] = {
+        model_field: model,
+        aspect_ratio_field: aspect_ratio,
+        image_size_field: image_size,
+    }
+
+    if prompt:
+        payload[prompt_field] = prompt
+
+    if images:
+        payload[images_field] = [pil_to_data_url(img) for img in images]
+
+    return payload
+
+
 def call_nano_banana_pro(
     prompt: str,
     images: list[Image.Image] | None,
     model: str,
-    output_format: str,
-    style: str,
+    aspect_ratio: str,
+    image_size: str,
 ) -> tuple[Image.Image | None, str]:
     cfg = load_config()
     endpoint = cfg["api"]["endpoint"]
     api_key = cfg["api"]["key"]
+    request_fields = cfg.get("request_fields", {})
 
     prompt = (prompt or "").strip()
     images = images or []
@@ -110,17 +145,14 @@ def call_nano_banana_pro(
     if not prompt and not images:
         return None, "❌ 参数错误：文本和参考图至少提供一个。"
 
-    payload: dict[str, Any] = {
-        "model": model,
-        "output_format": output_format,
-        "style": style,
-    }
-
-    if prompt:
-        payload["prompt"] = prompt
-
-    if images:
-        payload["reference_images"] = [pil_to_base64(img) for img in images]
+    payload = build_payload(
+        prompt=prompt,
+        images=images,
+        model=model,
+        aspect_ratio=aspect_ratio,
+        image_size=image_size,
+        request_fields=request_fields,
+    )
 
     headers = {
         "Content-Type": "application/json",
@@ -148,12 +180,15 @@ def build_ui() -> gr.Blocks:
     cfg = load_config()
     defaults = cfg.get("defaults", {})
 
-    model_options = defaults.get("model_options", ["nano-banana-pro"])
-    format_options = defaults.get("output_format_options", ["url", "base64"])
-    style_options = defaults.get("style_options", ["default", "photoreal", "anime"])
+    model_options = defaults.get("model_options", ["nano-banana-fast", "nano-banana", "nano-banana-pro"])
+    aspect_ratio_options = defaults.get(
+        "aspect_ratio_options",
+        ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "5:4", "4:5", "21:9"],
+    )
+    image_size_options = defaults.get("image_size_options", ["1K", "2K", "4K"])
 
     with gr.Blocks(title="Nano Banana Pro 工具页") as demo:
-        gr.Markdown("## Nano Banana Pro 生成页\n支持文本 + 多张参考图（至少一个必填）")
+        gr.Markdown("## Nano Banana 生成页\n支持文本 + 多张参考图（至少一个必填）")
 
         with gr.Row(equal_height=True):
             with gr.Column(scale=1):
@@ -162,19 +197,19 @@ def build_ui() -> gr.Blocks:
 
                 with gr.Row():
                     model = gr.Dropdown(
-                        label="模型",
+                        label="模型名",
                         choices=model_options,
                         value=defaults.get("model", model_options[0]),
                     )
-                    output_format = gr.Dropdown(
-                        label="输出格式",
-                        choices=format_options,
-                        value=defaults.get("output_format", format_options[0]),
+                    aspect_ratio = gr.Dropdown(
+                        label="宽高比",
+                        choices=aspect_ratio_options,
+                        value=defaults.get("aspect_ratio", aspect_ratio_options[0]),
                     )
-                    style = gr.Dropdown(
-                        label="风格",
-                        choices=style_options,
-                        value=defaults.get("style", style_options[0]),
+                    image_size = gr.Dropdown(
+                        label="分辨率",
+                        choices=image_size_options,
+                        value=defaults.get("image_size", image_size_options[0]),
                     )
 
                 submit = gr.Button("提交", variant="primary")
@@ -185,7 +220,7 @@ def build_ui() -> gr.Blocks:
 
         submit.click(
             fn=call_nano_banana_pro,
-            inputs=[prompt, images, model, output_format, style],
+            inputs=[prompt, images, model, aspect_ratio, image_size],
             outputs=[result_image, result_text],
         )
 
