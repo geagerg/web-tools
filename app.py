@@ -72,6 +72,34 @@ def build_image_previews(image_paths: list[str] | None) -> list[Image.Image]:
     return load_reference_images(image_paths)
 
 
+def file_item_to_path(file_item: Any) -> str | None:
+    if isinstance(file_item, str):
+        return file_item
+    if hasattr(file_item, "name"):
+        return str(file_item.name)
+    if isinstance(file_item, dict) and "name" in file_item:
+        return str(file_item["name"])
+    return None
+
+
+def append_reference_files(new_files: Any, current_paths: list[str] | None) -> tuple[list[str], list[Image.Image], str]:
+    paths = list(current_paths or [])
+    files = new_files if isinstance(new_files, list) else [new_files]
+
+    for file_item in files:
+        path = file_item_to_path(file_item)
+        if path and path not in paths:
+            paths.append(path)
+
+    previews = build_image_previews(paths)
+    status_text = f"已上传 {len(previews)} 张参考图"
+    return paths, previews, status_text
+
+
+def clear_reference_files() -> tuple[list[str], list[Image.Image], str]:
+    return [], [], "已上传 0 张参考图"
+
+
 def decode_base64_image(image_data: str) -> Image.Image | None:
     try:
         if image_data.startswith("data:"):
@@ -263,15 +291,19 @@ def build_ui() -> gr.Blocks:
     with gr.Blocks(title="Nano Banana Pro 工具页") as demo:
         gr.Markdown("## Nano Banana 生成页\n支持文本 + 多张参考图（至少一个必填）")
 
+        reference_paths = gr.State([])
+
         with gr.Row():
             with gr.Column(scale=1):
                 prompt = gr.Textbox(label="文本提示词（可选）", lines=4, placeholder="输入你想生成的内容")
-                images = gr.File(
-                    label="参考图（可选，可上传多张）",
+                upload_refs = gr.UploadButton(
+                    "拖拽或点击上传参考图（可连续添加）",
                     file_count="multiple",
                     file_types=["image"],
-                    type="filepath",
+                    size="sm",
                 )
+                clear_refs = gr.Button("清空参考图", size="sm")
+                ref_status = gr.Markdown("已上传 0 张参考图")
                 image_previews = gr.Gallery(
                     label="参考图预览",
                     columns=4,
@@ -279,7 +311,6 @@ def build_ui() -> gr.Blocks:
                     object_fit="cover",
                     elem_id="ref-preview",
                 )
-                gr.Markdown("上传后可看到缩略图预览，也可继续点击上传区域添加更多图片。")
 
                 with gr.Row():
                     model = gr.Dropdown(
@@ -304,11 +335,20 @@ def build_ui() -> gr.Blocks:
                 result_image = gr.Image(label="输出图片", type="pil", height=520)
                 result_text = gr.Code(label="接口响应（调试）", language="json", lines=8)
 
-        images.change(fn=build_image_previews, inputs=images, outputs=image_previews)
+        upload_refs.upload(
+            fn=append_reference_files,
+            inputs=[upload_refs, reference_paths],
+            outputs=[reference_paths, image_previews, ref_status],
+        )
+
+        clear_refs.click(
+            fn=clear_reference_files,
+            outputs=[reference_paths, image_previews, ref_status],
+        )
 
         submit.click(
             fn=call_nano_banana_pro,
-            inputs=[prompt, images, model, aspect_ratio, image_size],
+            inputs=[prompt, reference_paths, model, aspect_ratio, image_size],
             outputs=[result_image, result_text],
         )
 
