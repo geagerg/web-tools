@@ -1,0 +1,39 @@
+api:
+  endpoint: "https://your-proxy-endpoint/v1/images/generations"
+  key: "your-api-key"
+
+# 代理接口字段名映射（若你的代理字段不同可在这里改，不用改代码）
+request_fields:
+  model: "model"
+  prompt: "prompt"
+  images: "urls"
+  aspect_ratio: "aspectRatio"
+  image_size: "imageSize"
+
+defaults:
+  model: "nano-banana-fast"
+  aspect_ratio: "auto"
+  image_size: "1K"
+
+  model_options:
+    - "nano-banana-fast"
+    - "nano-banana"
+    - "nano-banana-pro"
+
+  aspect_ratio_options:
+    - "auto"
+    - "1:1"
+    - "16:9"
+    - "9:16"
+    - "4:3"
+    - "3:4"
+    - "3:2"
+    - "2:3"
+    - "5:4"
+    - "4:5"
+    - "21:9"
+
+  image_size_options:
+    - "1K"
+    - "2K"
+    - "4K"
