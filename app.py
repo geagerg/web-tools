@@ -123,4 +123,4 @@ def build_ui() -> gr.Blocks:
 
 if __name__ == "__main__":
     app = build_ui()
-    app.launch(server_name="0.0.0.0", server_port=45001)
+    app.launch(server_name="0.0.0.0", server_port=45001, root_path="/tools")
