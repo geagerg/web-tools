@@ -82,7 +82,10 @@ def file_item_to_path(file_item: Any) -> str | None:
     return None
 
 
-def append_reference_files(new_files: Any, current_paths: list[str] | None) -> tuple[list[str], list[Image.Image], str]:
+def append_reference_files(
+    new_files: Any,
+    current_paths: list[str] | None,
+) -> tuple[list[str], list[Image.Image], str, Any]:
     paths = list(current_paths or [])
     files = new_files if isinstance(new_files, list) else [new_files]
 
@@ -93,7 +96,7 @@ def append_reference_files(new_files: Any, current_paths: list[str] | None) -> t
 
     previews = build_image_previews(paths)
     status_text = f"已上传 {len(previews)} 张参考图"
-    return paths, previews, status_text
+    return paths, previews, status_text, None
 
 
 def clear_reference_files() -> tuple[list[str], list[Image.Image], str]:
@@ -296,11 +299,11 @@ def build_ui() -> gr.Blocks:
         with gr.Row():
             with gr.Column(scale=1):
                 prompt = gr.Textbox(label="文本提示词（可选）", lines=4, placeholder="输入你想生成的内容")
-                upload_refs = gr.UploadButton(
-                    "拖拽或点击上传参考图（可连续添加）",
+                upload_refs = gr.File(
+                    label="拖拽或点击上传参考图（可连续添加）",
                     file_count="multiple",
                     file_types=["image"],
-                    size="sm",
+                    type="filepath",
                 )
                 clear_refs = gr.Button("清空参考图", size="sm")
                 ref_status = gr.Markdown("已上传 0 张参考图")
@@ -335,10 +338,10 @@ def build_ui() -> gr.Blocks:
                 result_image = gr.Image(label="输出图片", type="pil", height=520)
                 result_text = gr.Code(label="接口响应（调试）", language="json", lines=8)
 
-        upload_refs.upload(
+        upload_refs.change(
             fn=append_reference_files,
             inputs=[upload_refs, reference_paths],
-            outputs=[reference_paths, image_previews, ref_status],
+            outputs=[reference_paths, image_previews, ref_status, upload_refs],
         )
 
         clear_refs.click(
