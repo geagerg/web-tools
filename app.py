@@ -107,6 +107,28 @@ def materialize_image(image_payload: str) -> Image.Image | None:
     return decode_base64_image(image_payload)
 
 
+def parse_response_payload(response: requests.Response) -> dict[str, Any] | None:
+    try:
+        return response.json()
+    except ValueError:
+        text = response.text or ""
+        last_event: dict[str, Any] | None = None
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line.startswith("data:"):
+                continue
+            content = line[5:].strip()
+            if not content:
+                continue
+            try:
+                maybe_json = json.loads(content)
+            except ValueError:
+                continue
+            if isinstance(maybe_json, dict):
+                last_event = maybe_json
+        return last_event
+
+
 def build_payload(
     prompt: str,
     images: list[Image.Image],
@@ -174,9 +196,8 @@ def call_nano_banana_pro(
     except requests.RequestException as exc:
         return None, f"❌ 接口请求失败: {exc}"
 
-    try:
-        data = response.json()
-    except ValueError:
+    data = parse_response_payload(response)
+    if data is None:
         return None, response.text
 
     image_payload = find_image_payload(data)
@@ -224,8 +245,8 @@ def build_ui() -> gr.Blocks:
                 submit = gr.Button("提交", variant="primary")
 
             with gr.Column(scale=1):
-                result_image = gr.Image(label="输出图片", type="pil")
-                result_text = gr.Code(label="接口响应", language="json")
+                result_image = gr.Image(label="输出图片", type="pil", height=520)
+                result_text = gr.Code(label="接口响应（调试）", language="json", lines=8)
 
         submit.click(
             fn=call_nano_banana_pro,
