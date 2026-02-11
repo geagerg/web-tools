@@ -3,8 +3,11 @@ from __future__ import annotations
 import base64
 import io
 import json
+import mimetypes
+import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import gradio as gr
 import requests
@@ -166,6 +169,39 @@ def materialize_image(image_payload: str) -> Image.Image | None:
     return decode_base64_image(image_payload)
 
 
+def persist_original_image(image_payload: str) -> str | None:
+    if image_payload.startswith("http://") or image_payload.startswith("https://"):
+        try:
+            response = requests.get(image_payload, timeout=30)
+            response.raise_for_status()
+            parsed = urlparse(image_payload)
+            suffix = Path(parsed.path).suffix or mimetypes.guess_extension(response.headers.get("Content-Type", "")) or ".png"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                f.write(response.content)
+                return f.name
+        except requests.RequestException:
+            return None
+
+    try:
+        raw = image_payload
+        if raw.startswith("data:"):
+            raw = raw.split(",", 1)[1]
+        binary = base64.b64decode(raw)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
+            f.write(binary)
+            return f.name
+    except Exception:
+        return None
+
+
+def build_image_source_markdown(image_payload: str | None) -> str:
+    if not image_payload:
+        return ""
+    if image_payload.startswith("http://") or image_payload.startswith("https://"):
+        return f"[查看/下载原图（高清）]({image_payload})"
+    return "原图为 Base64 返回，建议使用下方下载按钮保存原图。"
+
+
 def parse_response_payload(response: requests.Response) -> dict[str, Any] | None:
     try:
         return response.json()
@@ -239,7 +275,7 @@ def call_nano_banana_pro(
     model: str,
     aspect_ratio: str,
     image_size: str,
-) -> tuple[Image.Image | None, str]:
+) -> tuple[Image.Image | None, str, str, str | None]:
     cfg = load_config()
     endpoint = cfg["api"]["endpoint"]
     api_key = cfg["api"]["key"]
@@ -249,7 +285,7 @@ def call_nano_banana_pro(
     images = load_reference_images(image_paths)
 
     if not prompt and not images:
-        return None, "❌ 参数错误：文本和参考图至少提供一个。"
+        return None, "❌ 参数错误：文本和参考图至少提供一个。", "", None
 
     payload = build_payload(
         prompt=prompt,
@@ -269,15 +305,18 @@ def call_nano_banana_pro(
         response = requests.post(endpoint, headers=headers, json=payload, timeout=90)
         response.raise_for_status()
     except requests.RequestException as exc:
-        return None, format_debug_output(request_payload=payload, error=f"接口请求失败: {exc}")
+        return None, format_debug_output(request_payload=payload, error=f"接口请求失败: {exc}"), "", None
 
     data = parse_response_payload(response)
     if data is None:
-        return None, format_debug_output(request_payload=payload, raw_response=response.text)
+        return None, format_debug_output(request_payload=payload, raw_response=response.text), "", None
 
     image_payload = find_image_payload(data)
     image = materialize_image(image_payload) if image_payload else None
-    return image, format_debug_output(request_payload=payload, response_payload=data)
+    source_markdown = build_image_source_markdown(image_payload)
+    original_file = persist_original_image(image_payload) if image_payload else None
+
+    return image, format_debug_output(request_payload=payload, response_payload=data), source_markdown, original_file
 
 
 def build_ui() -> gr.Blocks:
@@ -335,7 +374,9 @@ def build_ui() -> gr.Blocks:
                 submit = gr.Button("提交", variant="primary", size="sm")
 
             with gr.Column(scale=1):
-                result_image = gr.Image(label="输出图片", type="pil", height=520)
+                result_image = gr.Image(label="输出图片（预览）", type="pil", height=520)
+                source_link = gr.Markdown()
+                download_file = gr.File(label="下载原图（高清）")
                 result_text = gr.Code(label="接口响应（调试）", language="json", lines=8)
 
         upload_refs.change(
@@ -352,7 +393,7 @@ def build_ui() -> gr.Blocks:
         submit.click(
             fn=call_nano_banana_pro,
             inputs=[prompt, reference_paths, model, aspect_ratio, image_size],
-            outputs=[result_image, result_text],
+            outputs=[result_image, result_text, source_link, download_file],
         )
 
     return demo
